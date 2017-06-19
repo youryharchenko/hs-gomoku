@@ -6,6 +6,7 @@ module Gomoku
     ) where
 
 import GHC.Generics
+import System.Random
 
 data Game = Game
   { game :: [[Int]]
@@ -14,9 +15,8 @@ data Game = Game
 
 data Net = Net
   { allSlots :: [Slot]
-  , activeSlots :: [[Slot]]
   , allPoints :: [Point]
-  , emptyPoints :: [Point]
+  , union :: [Union]
   , steps :: [[Int]]
   } deriving (Show)
 
@@ -35,6 +35,11 @@ data Slot = Slot
   , ss :: Int
   } deriving (Show)
 
+data Union = Union
+  { point :: Point
+  ,  slot :: Slot
+  } deriving (Show)
+
 calculate :: Game -> Game
 calculate oldGame = newGame $ newNet oldGame
 
@@ -47,23 +52,68 @@ applySteps = foldl applyStep
 applyStep :: Net -> [Int] -> Net
 applyStep net step = Net
   { steps = steps net ++ [step]
-  , allPoints = allPoints net
-  , emptyPoints = emptyPoints net
-  , allSlots = allSlots net
-  , activeSlots = activeSlots net}
+  , allPoints = nextPoints
+  , allSlots = nextSlots
+  , union = nextUnion}
+  where
+    nextPoints = nextAllPoints net step
+    nextSlots = nextAllSlots net step
+    nextUnion = [Union {point = p, slot = s} | p <- nextPoints, s <- nextSlots, isPointInSlot p s]
+
+nextAllPoints :: Net -> [Int] -> [Point]
+nextAllPoints net step = [if not (x p == px && y p == py) then p else Point {x = px, y = py, rp = rp p, sp = c} | p <- points]
+  where
+    px = head step
+    py = last step
+    points = allPoints net
+    c = 1 + mod (length $ steps net) 2
+
+nextAllSlots :: Net -> [Int] -> [Slot]
+nextAllSlots net step = [nextSlot s sx sy | s <- slots]
+  where
+    sx = head step
+    sy = last step
+    slots = allSlots net
+    c = 1 + mod (length $ steps net) 2
+    nextSlot slot x y
+      | inSlot && st == 0 = Slot{scpX = scpx, scpY = scpy, d = sd, rs = 1, ss = c}
+      | inSlot && st == c = Slot{scpX = scpx, scpY = scpy, d = sd, rs = srs + 1, ss = st}
+      | inSlot && st < 3 = Slot{scpX = scpx, scpY = scpy, d = sd, rs = -1, ss = 3}
+      | otherwise = slot
+      where
+        inSlot = isPointInSlot Point{x = x, y = y, rp = [0, 0, 0], sp = 0} slot
+        st = ss slot
+        scpx = scpX slot
+        scpy = scpY slot
+        sd = d slot
+        srs = rs slot
 
 
 initNet :: Net
 initNet = Net
   { steps = []
   , allPoints = fillAllPoints
-  , emptyPoints = fillAllPoints
   , allSlots = fillAllSlots
-  , activeSlots = [fillAllSlots, [], []]}
+  , union = [Union {point = p, slot = s} | p <- fillAllPoints, s <- fillAllSlots, isPointInSlot p s]}
   where
     fillAllPoints = [Point{x = i, y = j, rp = [countSlotsForPoint i j, 0, 0], sp = 0} | i <- [0..14], j <- [0..14]]
     fillAllSlots = [Slot {scpX = i, scpY = j, d = k, rs = 0, ss = 0} | i <- [0..14], j <- [0..14], k <- [0..3], isScpValid i j k]
     countSlotsForPoint x y = length $ createSlotsForPoint x y
+
+isPointInSlot :: Point -> Slot -> Bool
+isPointInSlot point slot
+  | ds == 0 && dx == 0 && dy < 3 = True
+  | ds == 1 && dy == 0 && dx < 3 = True
+  | (ds == 2 || ds == 3) && dx == dy && dx < 3 = True
+  | otherwise = False
+  where
+    ds = d slot
+    xs = scpX slot
+    ys = scpY slot
+    xp = x point
+    yp = y point
+    dx = abs (xp - xs)
+    dy = abs (yp - ys)
 
 isScpValid :: Int -> Int -> Int -> Bool
 isScpValid x y d
@@ -98,8 +148,29 @@ checkDraw :: Net -> Bool
 checkDraw net = null a0 && null a1 && null a2
   where (a0 : a1 : a2: _) = activeSlots net
 
-calcStep :: Net -> [Int]
-calcStep net = [0,0]
+activeSlots :: Net -> [[Slot]]
+activeSlots net = [slots0, slots1, slots2]
+  where
+    alls = allSlots net
+    slots0 = [s | s <- alls, ss s == 0]
+    slots1 = [s | s <- alls, ss s == 1]
+    slots2 = [s | s <- alls, ss s == 2]
 
 nextNet :: Net -> [Int] -> Net
 nextNet = applyStep
+
+pick :: [[Int]] -> [Int]
+pick xs = step
+  where
+    (randNumber, newGen) = randomR (0, length xs - 1) (mkStdGen $ length xs) :: (Int, StdGen)
+    step = head $ drop randNumber xs
+
+calcStep :: Net -> [Int]
+calcStep net
+  | not (null maxRate) = pick maxRate
+  where
+    c = 1 + mod (length $ steps net) 2
+    maxRate = calcPointMaxRate net c
+
+calcPointMaxRate :: Net -> Int -> [[Int]]
+calcPointMaxRate net c = [[0,1], [2,3], [10, 12]]
