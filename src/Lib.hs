@@ -12,6 +12,10 @@ import Network.Wai.Middleware.RequestLogger
 import Data.Aeson (FromJSON, ToJSON)
 import Data.ByteString.Lazy.Char8 (ByteString)
 import Gomoku
+import Data.Time.Clock
+
+integralTime :: (Integral a) => IO a
+integralTime = fmap (floor . utctDayTime) getCurrentTime
 
 data User = User { userId :: Int, userName :: String } deriving (Show, Generic)
 
@@ -73,5 +77,6 @@ getGomoku = do
 
 postGomoku :: ActionM ()
 postGomoku = do
+  --seed <- integralTime
   game <- jsonData
   json $ calculate game

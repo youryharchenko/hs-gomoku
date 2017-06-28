@@ -44,7 +44,9 @@ library
                        transformers-compat >= 0.4      && < 0.6,
                        wai                 >= 3.0.0    && < 3.3,
                        wai-extra           >= 3.0.0    && < 3.1,
-                       warp                >= 3.0.0 && < 3.3
+                       warp                >= 3.0.0 && < 3.3,
+                       random,
+                       time
 
 executable gomoku-hs-exe
   hs-source-dirs:      app

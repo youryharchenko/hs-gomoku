@@ -23,7 +23,6 @@ data Net = Net
 data Point  = Point
   { x :: Int
   , y :: Int
-  , rp :: [Int]
   , sp :: Int
   } deriving (Show)
 
@@ -61,7 +60,7 @@ applyStep net step = Net
     nextUnion = [Union {point = p, slot = s} | p <- nextPoints, s <- nextSlots, isPointInSlot p s]
 
 nextAllPoints :: Net -> [Int] -> [Point]
-nextAllPoints net step = [if not (x p == px && y p == py) then p else Point {x = px, y = py, rp = rp p, sp = c} | p <- points]
+nextAllPoints net step = [if not (x p == px && y p == py) then p else Point {x = px, y = py, sp = c} | p <- points]
   where
     px = head step
     py = last step
@@ -81,7 +80,7 @@ nextAllSlots net step = [nextSlot s sx sy | s <- slots]
       | inSlot && st < 3 = Slot{scpX = scpx, scpY = scpy, d = sd, rs = -1, ss = 3}
       | otherwise = slot
       where
-        inSlot = isPointInSlot Point{x = x, y = y, rp = [0, 0, 0], sp = 0} slot
+        inSlot = isPointInSlot Point{x = x, y = y, sp = 0} slot
         st = ss slot
         scpx = scpX slot
         scpy = scpY slot
@@ -96,15 +95,16 @@ initNet = Net
   , allSlots = fillAllSlots
   , union = [Union {point = p, slot = s} | p <- fillAllPoints, s <- fillAllSlots, isPointInSlot p s]}
   where
-    fillAllPoints = [Point{x = i, y = j, rp = [countSlotsForPoint i j, 0, 0], sp = 0} | i <- [0..14], j <- [0..14]]
+    fillAllPoints = [Point{x = i, y = j, sp = 0} | i <- [0..14], j <- [0..14]]
     fillAllSlots = [Slot {scpX = i, scpY = j, d = k, rs = 0, ss = 0} | i <- [0..14], j <- [0..14], k <- [0..3], isScpValid i j k]
     countSlotsForPoint x y = length $ createSlotsForPoint x y
 
 isPointInSlot :: Point -> Slot -> Bool
 isPointInSlot point slot
-  | ds == 0 && dx == 0 && dy < 3 = True
-  | ds == 1 && dy == 0 && dx < 3 = True
-  | (ds == 2 || ds == 3) && dx == dy && dx < 3 = True
+  | ds == 0 && dx == 0 && abs dy < 3 = True
+  | ds == 1 && dy == 0 && abs dx < 3 = True
+  | ds == 2 && dx == dy && abs dx < 3 = True
+  | ds == 3 && dx == -dy && abs dx < 3 = True
   | otherwise = False
   where
     ds = d slot
@@ -112,8 +112,8 @@ isPointInSlot point slot
     ys = scpY slot
     xp = x point
     yp = y point
-    dx = abs (xp - xs)
-    dy = abs (yp - ys)
+    dx = xp - xs
+    dy = yp - ys
 
 isScpValid :: Int -> Int -> Int -> Bool
 isScpValid x y d
@@ -156,6 +156,10 @@ activeSlots net = [slots0, slots1, slots2]
     slots1 = [s | s <- alls, ss s == 1]
     slots2 = [s | s <- alls, ss s == 2]
 
+emptyPoints :: Net -> [Point]
+emptyPoints net = [p | p <- points, sp p == 0]
+  where points = allPoints net
+
 nextNet :: Net -> [Int] -> Net
 nextNet = applyStep
 
@@ -167,10 +171,94 @@ pick xs = step
 
 calcStep :: Net -> [Int]
 calcStep net
+  | not (null slot4c) = slot4c
+  | not (null slot4ac) = slot4ac
+  | not (null findX) = pick findX
   | not (null maxRate) = pick maxRate
   where
     c = 1 + mod (length $ steps net) 2
+    slot4c = findSlot4 net c
+    slot4ac = findSlot4 net (3 - c)
+    findX = findPointX net c
     maxRate = calcPointMaxRate net c
 
+
+findSlot4 :: Net -> Int -> [Int]
+findSlot4 net c
+  | null points = []
+  | otherwise = head points
+  where
+    points = [[x (point u), y (point u)] | u <- union net, ss (slot u) == c, rs (slot u) == 4, sp (point u) == 0]
+
+findPointX :: Net -> Int -> [[Int]]
+findPointX net c
+  | not (null findXc21) = findXc21
+  | not (null findXa21) = findXa21
+  | not (null findXc15) = findXc15
+  | not (null findXa15) = findXa15
+  | not (null findXc14) = findXc14
+  | not (null findXa14) = findXa14
+  | not (null findXc13) = findXc13
+  | not (null findXa13) = findXa13
+  | not (null findXc12) = findXc12
+  | not (null findXa12) = findXa12
+  | not (null findXc11) = findXc11
+  | not (null findXa11) = findXa11
+  | not (null findXc010) = findXc010
+  | not (null findXa010) = findXa010
+  | not (null findXc09) = findXc09
+  | not (null findXa09) = findXa09
+  | not (null findXc08) = findXc08
+  | not (null findXa08) = findXa08
+  | not (null findXc07) = findXc07
+  | not (null findXa07) = findXa07
+  | otherwise = []
+  where
+    findXc21 = findX c 2 1
+    findXa21 = findX (3 - c) 2 1
+    findXc15 = findX c 1 5
+    findXa15 = findX (3 - c) 1 5
+    findXc14 = findX c 1 4
+    findXa14 = findX (3 - c) 1 4
+    findXc13 = findX c 1 3
+    findXa13 = findX (3 - c) 1 3
+    findXc12 = findX c 1 2
+    findXa12 = findX (3 - c) 1 2
+    findXc11 = findX c 1 1
+    findXa11 = findX (3 - c) 1 1
+    findXc010 = findX c 0 10
+    findXa010 = findX (3 - c) 0 10
+    findXc09 = findX c 0 9
+    findXa09 = findX (3 - c) 0 9
+    findXc08 = findX c 0 8
+    findXa08 = findX (3 - c) 0 8
+    findXc07 = findX c 0 7
+    findXa07 = findX (3 - c) 0 7
+    findX c r b = [[x p, y p] | (r, p) <- a, r == m, r > b]
+      where
+        a = [(xPoint net p c r, p) | p <- emptyPoints net]
+        m = maximum [r | (r, _) <- a]
+
+
+xPoint :: Net -> Point -> Int -> Int -> Int
+xPoint net p c r = sum xList
+  where
+    xList = [1 | s <- pointSlots, ss s == c, rs s > r]
+    pointSlots = [slot u | u <- union net, x (point u) == x p, y (point u) == y p]
+
 calcPointMaxRate :: Net -> Int -> [[Int]]
-calcPointMaxRate net c = [[0,1], [2,3], [10, 12]]
+calcPointMaxRate net c = [[x p, y p] | (r, p) <- a, r == m]
+  where
+    a = [(ratePoint net p c, p) | p <- emptyPoints net]
+    m = maximum [r | (r, _) <- a]
+
+
+ratePoint :: Net -> Point -> Int -> Int
+ratePoint net p c = sum rList
+  where
+    rList = [calc s | s <- pointSlots]
+    pointSlots = [slot u | u <- union net, x (point u) == x p, y (point u) == y p]
+    calc s
+      | ss s == 0 = 1
+      | ss s == 3 = 0
+      | otherwise = (1 + rs s) * (1 + rs s)
