@@ -18,6 +18,7 @@ data Net = Net
   , allPoints :: [Point]
   , union :: [Union]
   , steps :: [[Int]]
+  , seed :: Int
   } deriving (Show)
 
 data Point  = Point
@@ -39,11 +40,14 @@ data Union = Union
   ,  slot :: Slot
   } deriving (Show)
 
-calculate :: Game -> Game
-calculate oldGame = newGame $ newNet oldGame
 
-newNet :: Game -> Net
-newNet oldGame = applySteps initNet $ game oldGame
+calculate :: Integer -> Game -> Game
+calculate seed oldGame = newGame $ newNet randNumber oldGame
+  where
+    (randNumber, newGen) = randomR (0, 255) (mkStdGen $ fromInteger seed) :: (Int, StdGen)
+
+newNet :: Int -> Game -> Net
+newNet seed oldGame = applySteps (initNet seed) $ game oldGame
 
 applySteps :: Net -> [[Int]] -> Net
 applySteps = foldl applyStep
@@ -53,7 +57,8 @@ applyStep net step = Net
   { steps = steps net ++ [step]
   , allPoints = nextPoints
   , allSlots = nextSlots
-  , union = nextUnion}
+  , union = nextUnion
+  , seed = seed net}
   where
     nextPoints = nextAllPoints net step
     nextSlots = nextAllSlots net step
@@ -84,12 +89,13 @@ nextAllSlots net step@[sx, sy] = [nextSlot s sx sy | s <- slots]
         srs = rs slot
 
 
-initNet :: Net
-initNet = Net
+initNet :: Int -> Net
+initNet seed = Net
   { steps = []
   , allPoints = fillAllPoints
   , allSlots = fillAllSlots
-  , union = [Union {point = p, slot = s} | p <- fillAllPoints, s <- fillAllSlots, isPointInSlot p s]}
+  , union = [Union {point = p, slot = s} | p <- fillAllPoints, s <- fillAllSlots, isPointInSlot p s]
+  , seed = seed}
   where
     fillAllPoints = [Point{x = i, y = j, sp = 0} | i <- [0..14], j <- [0..14]]
     fillAllSlots = [Slot {scpX = i, scpY = j, d = k, rs = 0, ss = 0} | i <- [0..14], j <- [0..14], k <- [0..3], isScpValid i j k]
@@ -151,24 +157,25 @@ emptyPoints net = [p | p <- points, sp p == 0]
 nextNet :: Net -> [Int] -> Net
 nextNet = applyStep
 
-pick :: [[Int]] -> [Int]
-pick xs = step
+pick :: Int -> [[Int]] -> [Int]
+pick seed xs = step
   where
-    (randNumber, newGen) = randomR (0, length xs - 1) (mkStdGen $ length xs) :: (Int, StdGen)
+    (randNumber, newGen) = randomR (0, length xs - 1) (mkStdGen seed) :: (Int, StdGen)
     step = head $ drop randNumber xs
 
 calcStep :: Net -> [Int]
 calcStep net
   | not (null slot4c) = slot4c
   | not (null slot4ac) = slot4ac
-  | not (null findX) = pick findX
-  | not (null maxRate) = pick maxRate
+  | not (null findX) = pick sd findX
+  | not (null maxRate) = pick sd maxRate
   where
     c = 1 + mod (length $ steps net) 2
     slot4c = findSlot4 net c
     slot4ac = findSlot4 net (ac c)
     findX = findPointX net c
     maxRate = calcPointMaxRate net c
+    sd = seed net
 
 
 findSlot4 :: Net -> Int -> [Int]
